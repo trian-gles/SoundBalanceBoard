@@ -2,6 +2,7 @@
 #include <HX71708_ADC.h> // Die HX71708 Bibliothek für den 24-Bit A/D-Wandler
 #include "osc.h" // Die OSC Bibliothek für die Kommunikation
 #include "server.h" // Die Server-Bibliothek für WiFi und WebServer
+#include "audio_out.h" // Die Audio-Ausgabe-Bibliothek
 // Pin-Definitionen 
 const int SCK_PINS[] = {3, 5, 7, 9};
 const int DOUT_PINS[] = {2, 4, 6, 8};
@@ -25,6 +26,7 @@ void setup() {
     Serial.begin(115200);
     delay(5000);
     Serial.println("Initialisiere HX71708 ADCs...");
+    initializeAudioOut(); // Initialize audio output
 
     // Initialisierung aller Sensoren mit Schleife
     initializeSensors();
@@ -39,6 +41,7 @@ void setup() {
 }
 
 void loop() {
+    playSquareWave(); // Play square wave (example)
     // Alle Sensoren lesen
     for (int i = 0; i < NUM_SENSORS; i++) {
         float value = sensors[i].read_corrected();
