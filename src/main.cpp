@@ -1,8 +1,16 @@
 #include <Arduino.h>
+#include "M16.h"
 #include <HX71708_ADC.h> // Die HX71708 Bibliothek für den 24-Bit A/D-Wandler
-#include "osc.h" // Die OSC Bibliothek für die Kommunikation
-#include "server.h" // Die Server-Bibliothek für WiFi und WebServer
-#include "audio_out.h" // Die Audio-Ausgabe-Bibliothek
+#include "Osc.h"
+#include "Gain.h"
+
+Osc aOsc1; // declare an instance of the oscillator class
+Osc aOsc2; // declare an instance of the oscillator class
+Gain outputGain(1000); // 0 = silent, 1024 = full level
+unsigned long msNow = millis(); // current time since starting in milliseconds
+unsigned long pitchTime = msNow; // time for the next pitch update
+unsigned long pitchDelta = 1000; // time between pitch updates
+
 // Pin-Definitionen 
 const int SCK_PINS[] = {3, 5, 7, 9};
 const int DOUT_PINS[] = {2, 4, 6, 8};
@@ -22,9 +30,29 @@ void initializeSensors();
 void calibrateAllSensors();
 void calibrationValues();
 
+//Pins
+// #define I2S_BCK 12
+// #define I2S_DATA 11
+// #define I2S_LRCK 10
+
+#define I2S_BCK   47  // physical pin D12
+#define I2S_DATA  38  // physical pin D11
+#define I2S_LRCK  21  // physical pin D10
+
+void initializeAudioOut()
+{
+    seti2sPins(I2S_BCK, I2S_LRCK, I2S_DATA, -1);
+    delay(200); // let the Serial port get established
+    aOsc1.sinGen(); // initialise the osc's built-in wavetable with a sine waveform
+    aOsc2.sinGen();
+    aOsc1.setPitch(48); // MIDI pitch
+    aOsc2.setPitch(48); // MIDI pitch
+    audioStart();
+}
+
 void setup() {
     Serial.begin(115200);
-    delay(5000);
+    delay(500);
     Serial.println("Initialisiere HX71708 ADCs...");
     initializeAudioOut(); // Initialize audio output
 
@@ -35,20 +63,23 @@ void setup() {
     calibrateAllSensors();
     
     Serial.println("Initialisierung abgeschlossen.");
-
-    WiFiAP::initializeAP(); // Initialize WiFi in AP mode
-    WiFiAP::printPort(); // Print the UDP port number
 }
 
+int count = 0;
+
 void loop() {
-    playSquareWave(); // Play square wave (example)
+    count++;
+    //play(); // Play square wave (example)
     // Alle Sensoren lesen
     for (int i = 0; i < NUM_SENSORS; i++) {
         float value = sensors[i].read_corrected();
-        OSC::msg.add(abs(value));
     }
-    // Sende die OSC-Nachricht
-    OSC::sendMessage(OSC::msg);
+
+        pitchTime += pitchDelta;
+        float phase = TWO_PI * ((float)(count % 20000))/ 10000.0;
+        float pitch = 49 + sin(phase);
+        Serial.println(pitch);
+        aOsc1.setPitch(pitch);
 }
 
 void initializeSensors() {
@@ -84,5 +115,11 @@ void calibrationValues() {
         Serial.print(", Skalierungsfaktor = ");
         Serial.println(sensors[i].get_scale_factor(), 6);
     }
+}
+
+void audioUpdate() {
+  int32_t leftVal = outputGain.next(aOsc1.next() + aOsc2.next());
+  int32_t rightVal = leftVal;
+  audioBlockWrite(leftVal, rightVal);
 }
 

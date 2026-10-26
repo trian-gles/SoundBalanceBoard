@@ -107,14 +107,6 @@ long HX71708_ADC::read320Hz(void) {
 }
 
 
-    /**
-     * @brief Liest alle 4 Sensoren und gibt die Werte als Array zurück.
-     * Bisher nicht implementiert.
-     * @return Ein Array mit den 24-Bit Werten aller 4 Sensoren.
-     */
-    long read320Hz_All(void){
-
-    }
 
     /**
      * @brief Ermittelt den Nullpunkt des Sensors.
