@@ -8,31 +8,44 @@
  */
 class HX71708 {
 private:
-    bool _timeout_active;
+
+    // Pins
+    int _pdSckPin; //clock-pin
+    int _doutPin;  // data-pin
+    // Offset from tare operation
+    long _offset;
+    //stores the last read value (offset-corrected and scaled)
+    long _last_gram_value;
+    // Flag to indicate if the last read operation timed out
     bool _last_read_timed_out;
+    static constexpr unsigned long _READ_TIMEOUT_US = 50000;
+    //Flag if sensor idles
+    bool _idle;
     
+    
+
     // Drift-compensation-state
     unsigned long _last_activity_time;
     unsigned long _last_update_time;
     unsigned long _last_tare_time;
-    bool _idle;
+    
 
     void _custom_nop_delay(void) {
         ((void)0);
     }
     
-    // Drift-compensation-constants (should be synchronized with app_config)
-    /*static constexpr unsigned long DRIFT_IDLE_TIME_MS = 30000;      // 30s
-    static constexpr float DRIFT_WEIGHT_FACTOR = 0.2f;               // 20%
-    static constexpr unsigned long DRIFT_COOLDOWN_MS = 5000;         // 5s
-    static constexpr unsigned long DRIFT_UPDATE_INTERVAL_MS = 1000;  // 1s*/
+    /**
+     * @brief performs a soft tare update to adjust the offset
+     * @param weight_factor weighting factor for the new measurement (0.0-1.0). E.g. 0.2 = 20% new, 80% old.
+     * @return void
+     */
+    void _soft_tare(float weight_factor = AppConfig::DRIFT_WEIGHT_FACTOR);
+    
 
 public:
-    int _pdSckPin; //clock-pin
-    int _doutPin;  // data-pin
-    long _offset;
+    
     /**
-     * @brief HX71708_ADC constructor
+     * @brief HX71708 constructor
      * @param pdSckPin clock-pin connected to PD_SCK of HX71708
      * @param doutPin data-pin connected to DOUT of HX71708
      *                
@@ -43,27 +56,24 @@ public:
      */
     void begin(void);
     /**
-     * @brief returns offset of the sensor
-     */
-    long get_offset(void);
-    /**
      * @brief sets the offset of the sensor
      * @param offset the new offset value to set
      */
     void set_offset(long offset);
-
+    /**
+     * @brief returns offset of the sensor
+     */
+    long get_offset(void);
+    /**
+     * @brief returns the last read value (offset-corrected and scaled)
+     */
+    long get_last_gram_value(void) const;
+    
     /**
      * @brief checks if the sensor is currently in an idle state (no load, extended period)
      * @return true if idle, false otherwise
      */
     bool is_idle() const;
-    
-
-    /**
-     * @brief returns the raw, offset-corrected sensor value and scales by the scale factor
-     * @return Offset-corrected raw value as `long`.
-     */
-    long read_corrected(void);
     
     /**
      * @brief reads a 24-bit sensor value from the HX71708 ADC and sets the next data rate to 320Hz.
@@ -73,8 +83,14 @@ public:
     * @return The converted 24-bit value. In case of timeout, a safe fallback
     *         is returned and the ADC is reset briefly.
      */
-    long read(void);
+    long read_raw(void);
 
+    /**
+     * @brief returns the offset-corrected sensor value and scales by the scale factor
+     * @return Offset-corrected raw value as `long`.
+     */
+    long read_grams(void);
+    
     /**
      * @brief determines the zero point of the sensor with multiple blocks of readings which are averaged 
      * and the median of the block means is used as the offset
@@ -89,20 +105,12 @@ public:
     void simple_tare(void); 
 
     /**
-     * @brief performs a soft tare update to adjust the offset, when no load is present
-     * @param weight_factor weighting factor for the new measurement (0.0-1.0). E.g. 0.2 = 20% new, 80% old.
-     * @return void
-     */
-    void soft_tare(float weight_factor = AppConfig::DRIFT_WEIGHT_FACTOR);
-    
-    /**
      * @brief checks the current sensor value and updates drift compensation as well as idle status.
      *        Should be called regularly (e.g., once per second)
-     * @param sensor_value Offset-corrected sensor value in Counts.
      * @param presence_threshold Threshold above which the sensor is considered loaded.
      * @return void
      */
-    void check_idle_and_soft_tare(long sensor_value, long presence_threshold);
+    void drift_correction(long presence_threshold);
 };
 
 #endif // HX71708_ADC_H

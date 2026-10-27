@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include "M16.h"
-#include <HX71708_ADC.h> // Die HX71708 Bibliothek für den 24-Bit A/D-Wandler
+#include <HX71708.h> // Die HX71708 Bibliothek für den 24-Bit A/D-Wandler
 #include "Osc.h"
 #include "Gain.h"
 #include "app_config.h"
@@ -14,23 +14,17 @@ unsigned long msNow = millis(); // current time since starting in milliseconds
 unsigned long pitchTime = msNow; // time for the next pitch update
 unsigned long pitchDelta = 1000; // time between pitch updates
 
-// Pin-Definitionen 
-const int SCK_PINS[] = {3, 5, 7, 9};
-const int DOUT_PINS[] = {2, 4, 6, 8};
-//const int NUM_SENSORS = 4;
+
+
 
 // Array von Sensor-Objekten
 HX71708 sensors[AppConfig::NUM_SENSORS] = {
-    HX71708(SCK_PINS[0], DOUT_PINS[0]),
-    HX71708(SCK_PINS[1], DOUT_PINS[1]),
-    HX71708(SCK_PINS[2], DOUT_PINS[2]),
-    HX71708(SCK_PINS[3], DOUT_PINS[3])
+    HX71708(AppConfig::SCK_PINS[0], AppConfig::DOUT_PINS[0]),
+    HX71708(AppConfig::SCK_PINS[1], AppConfig::DOUT_PINS[1]),
+    HX71708(AppConfig::SCK_PINS[2], AppConfig::DOUT_PINS[2]),
+    HX71708(AppConfig::SCK_PINS[3], AppConfig::DOUT_PINS[3])
 };
 
-/*void initializeSensors();
-void calibrateAllSensors();
-void calibrationValues();
-*/
 
 //Pins
 // #define I2S_BCK 12
@@ -62,9 +56,8 @@ void setup() {
 
     Serial.println("Initialisiere HX71708 ADCs...");
     SensorRuntime::initialize_sensors(sensors, AppConfig::NUM_SENSORS);
-    delay(1000); // kurze Stabilisierung vor dem Tare
-    SensorRuntime::warm_up_sensors(sensors, AppConfig::NUM_SENSORS);
-    SensorRuntime::calibrate_all_sensors(
+    delay(1000); // short delay to allow sensors to stabilize
+    SensorRuntime::tare_all_sensors(
         sensors
     );
     Serial.println("HX71708 ADCs initialisiert.");    
@@ -77,8 +70,25 @@ void loop() {
     count++;
     //play(); // Play square wave (example)
     
-    // Alle Sensoren lesen
-    SignalProcessing::PolarCoordinates polarCoordinates = SignalProcessing::calculate_polar_balance(sensors, AppConfig::PRESENCE_THRESHOLD, AppConfig::BALANCE_MAX); 
+    SensorRuntime::read_sensors(sensors);
+    SensorRuntime::update_idle_states(
+        sensors
+    );
+
+    const SignalProcessing::SensorValues sensor_values{
+    .north = sensors[0].get_last_gram_value(),
+    .east = sensors[1].get_last_gram_value(),
+    .south = sensors[3].get_last_gram_value(),
+    .west = sensors[2].get_last_gram_value()
+};
+
+    const SignalProcessing::PolarCoordinates polarCoordinates =
+        SignalProcessing::calculate_polar_balance(
+            sensor_values,
+            AppConfig::PRESENCE_THRESHOLD,
+            AppConfig::BALANCE_MAX
+        );
+        
     Serial.println("Radius: " + String(polarCoordinates.radius) + ", Angle: " + String(polarCoordinates.angle));
 
     pitchTime += pitchDelta;
@@ -118,4 +128,3 @@ void audioUpdate() {
   int32_t rightVal = leftVal;
   audioBlockWrite(leftVal, rightVal);
 }
-

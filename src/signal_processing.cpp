@@ -6,45 +6,36 @@ namespace SignalProcessing {
 
 /**
  * @brief calculates the polar coordinates (radius and angle) of the balance based on sensor values
- * @param sensor_values array of sensor values
+ * @param sensor_values latest corrected values of all four sensors
  * @param presence_threshold threshold to determine if there is a load present
  * @param balance_max maximum value for the balance
- * @param num_sensors number of sensors (default is 4)
  * @return the polar coordinates (radius and angle) of the balance
  */
 PolarCoordinates calculate_polar_balance(
-    HX71708 sensors[],
+    const SensorValues& sensor_values,
     long presence_threshold,
     long balance_max
 ) {
-    if (sensors == nullptr) {
+    if (balance_max <= 0) {
         return {0, 0.0f};
     }
 
-    long sensor_values[4] = {0, 0, 0, 0};
-    for (uint8_t i = 0; i < 4; ++i) {
-        sensor_values[i] = sensors[i].read_corrected();
-        sensors[i].check_idle_and_soft_tare(
-            sensor_values[i],
-            presence_threshold
-        );
-    }
-
-    const long north = sensor_values[0];
-    const long east = sensor_values[1];
-    const long south = sensor_values[2];
-    const long west = sensor_values[3];
     const long total_load =
-        labs(north) + labs(east) + labs(south) + labs(west);
+        labs(sensor_values.north) +
+        labs(sensor_values.east) +
+        labs(sensor_values.south) +
+        labs(sensor_values.west);
 
     if (total_load <= presence_threshold) {
         return {0, 0.0f};
     }
 
     const long x_load =
-        (east + south) - (north + west);
+        (sensor_values.east + sensor_values.south) -
+        (sensor_values.north + sensor_values.west);
     const long y_load =
-        (north + east) - (west + south);
+        (sensor_values.north + sensor_values.east) -
+        (sensor_values.west + sensor_values.south);
 
     const float normalized_x =
         static_cast<float>(x_load) / total_load;

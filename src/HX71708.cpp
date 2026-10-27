@@ -1,4 +1,4 @@
-#include "HX71708_ADC.h" 
+#include "HX71708.h" 
 #include "app_config.h"
 
 /**
@@ -10,7 +10,7 @@ HX71708::HX71708(int pdSckPin, int doutPin) {
     _pdSckPin = pdSckPin;
     _doutPin = doutPin;
     _offset = 0; // inital offset as 0
-    _timeout_active = false;
+    _last_gram_value = 0;
     _last_read_timed_out = false;
     _last_activity_time = millis();
     _last_update_time = 0;
@@ -37,6 +37,10 @@ void HX71708::set_offset(long offset) {
         _offset = offset;
     }
 
+long HX71708::get_last_gram_value(void) const {
+    return _last_gram_value;
+}
+
 bool HX71708::is_idle() const {
     return _idle;
 }
@@ -54,7 +58,7 @@ void HX71708::tare() {
         int attempts = 0;
 
         while (valid_samples < block_size && attempts < max_attempts_per_block) {
-            long sample = read();
+            long sample = read_raw();
             attempts++;
 
             if (_last_read_timed_out) {
@@ -143,7 +147,7 @@ void HX71708::simple_tare() {
     int valid_samples = 0;
 
     for (int i = 0; i < num_samples; i++) {
-        long sample = read();
+        long sample = read_raw();
         if (!_last_read_timed_out) {
             sum += sample;
             valid_samples++;
@@ -164,7 +168,7 @@ void HX71708::simple_tare() {
 }
 
 
-long HX71708::read(void) {
+long HX71708::read_raw(void) {
     unsigned char i;
     unsigned long bcd = 0; // for storing the 24-bit internal code
     _last_read_timed_out = false;
@@ -172,11 +176,15 @@ long HX71708::read(void) {
     // set PD_SCK low to start the read process
     digitalWrite(_pdSckPin, LOW);
 
-    // wait for data ready
-    // When DOUT goes low, it indicates that the ADC is ready to output data
-    // If DOUT does not go low, this may indicate a problem, and the ADC must be reset
+    const unsigned long wait_start = micros();
     while (digitalRead(_doutPin) == HIGH) {
-
+        if (micros() - wait_start >= _READ_TIMEOUT_US) {
+            _last_read_timed_out = true;
+            digitalWrite(_pdSckPin, HIGH);
+            delayMicroseconds(200);
+            digitalWrite(_pdSckPin, LOW);
+            return 0;
+        }
         delayMicroseconds(2);
     }
 
@@ -210,40 +218,35 @@ long HX71708::read(void) {
     return bcd;
 }
 
-long HX71708::read_corrected() {
-    long rawValue = read(); // Lese den Rohwert vom ADC
-    return (rawValue - _offset) * AppConfig::SCALE_FACTOR; // Korrigiere um den Offset und skaliere
+long HX71708::read_grams() {
+    long rawValue = read_raw(); // Lese den Rohwert vom ADC
+    _last_gram_value =
+        (rawValue - _offset) * AppConfig::SCALE_FACTOR;
+    return _last_gram_value;
 }
 
-void HX71708::soft_tare(float weight_factor) {
+void HX71708::_soft_tare(float weight_factor) {
     if (weight_factor <= 0.0f || weight_factor > 1.0f) {
-        Serial.println("WARN: soft_tare() weight_factor muss zwischen 0.0 und 1.0 sein");
+        Serial.println("WARN: _soft_tare() weight_factor muss zwischen 0.0 und 1.0 sein");
         return;
     }
 
     long sample_sum = 0;
     int sample_count = 0;
     const int num_samples = 8;
-    const int timeout_ms = 50;
-
     for (int i = 0; i < num_samples; i++) {
-        unsigned long start = millis();
-        // Timeout-check for DOUT pin to go low (data ready)
-        while (digitalRead(_doutPin) == HIGH && (millis() - start) < timeout_ms) {
-            yield();
-        }
-        /*if ((millis() - start) >= timeout_ms) {
-            Serial.print("WARN: soft_tare() Timeout an DOUT-Pin ");
-            Serial.println(_doutPin);
-            return; // Abbrechen bei Timeout
-        }*/
-
-        long raw = read();
+        long raw = read_raw();
         if (!_last_read_timed_out) {
             sample_sum += raw;
             sample_count++;
         }
         delay(5); 
+    }
+
+    if (sample_count == 0) {
+        Serial.print("WARN: Soft-Tare abgebrochen, keine gueltigen Samples an DOUT ");
+        Serial.println(_doutPin);
+        return;
     }
 
     long new_sample = sample_sum / sample_count;
@@ -256,9 +259,10 @@ void HX71708::soft_tare(float weight_factor) {
     _offset = new_offset;
 }
 
-void HX71708::check_idle_and_soft_tare(long sensor_value, long presence_threshold) {
+void HX71708::drift_correction(long presence_threshold) {
     unsigned long now = millis();
-    bool sensor_idle = (std::labs(sensor_value) <= presence_threshold);
+    bool sensor_idle =
+        (std::labs(_last_gram_value) <= presence_threshold);
     if (sensor_idle) {
         unsigned long idle_duration = now - _last_activity_time;
         _idle = true;
@@ -266,7 +270,7 @@ void HX71708::check_idle_and_soft_tare(long sensor_value, long presence_threshol
         // Wenn idle UND Cooldown abgelaufen: Trigger sanfte Korrektur
         if (_idle && idle_duration > AppConfig::DRIFT_IDLE_TIME_MS) {
             if ((now - _last_tare_time) > AppConfig::DRIFT_COOLDOWN_MS) {
-                soft_tare();
+                _soft_tare();
                 _last_tare_time = now;
             }
         }
@@ -278,5 +282,3 @@ void HX71708::check_idle_and_soft_tare(long sensor_value, long presence_threshol
         _last_activity_time = now;
     }
 }
-
-

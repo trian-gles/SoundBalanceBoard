@@ -19,7 +19,7 @@ constexpr float SCALE_FACTOR= 0.0186f; // scale factor to convert raw counts to 
 
 // Drift-compensation settings
 constexpr uint16_t DRIFT_IDLE_TIME_MS = 500;      // 0.5s without load → drift correction
-constexpr float DRIFT_WEIGHT_FACTOR = 0.2f;         // 20% new offset, 80% old (exponentially weighted)
+constexpr float DRIFT_WEIGHT_FACTOR = 0.2f;         // 20% new offset, 80% old
 constexpr uint16_t DRIFT_COOLDOWN_MS = 1000;        // Minimum 1s between re-tare attempts
 constexpr uint16_t DRIFT_UPDATE_INTERVAL_MS = 1000; // Check drift every 1s
 
