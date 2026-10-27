@@ -7,13 +7,11 @@ namespace SignalProcessing {
 /**
  * @brief calculates the polar coordinates (radius and angle) of the balance based on sensor values
  * @param sensor_values latest corrected values of all four sensors
- * @param presence_threshold threshold to determine if there is a load present
  * @param balance_max maximum value for the balance
  * @return the polar coordinates (radius and angle) of the balance
  */
 PolarCoordinates calculate_polar_balance(
-    const SensorValues& sensor_values,
-    long presence_threshold,
+    const ::SensorValues& sensor_values,
     long balance_max
 ) {
     if (balance_max <= 0) {
@@ -21,12 +19,12 @@ PolarCoordinates calculate_polar_balance(
     }
 
     const long total_load =
-        labs(sensor_values.north) +
-        labs(sensor_values.east) +
-        labs(sensor_values.south) +
-        labs(sensor_values.west);
+        sensor_values.north +
+        sensor_values.east +
+        sensor_values.south +
+        sensor_values.west;
 
-    if (total_load <= presence_threshold) {
+    if (total_load == 0) {
         return {0, 0.0f};
     }
 
@@ -37,19 +35,14 @@ PolarCoordinates calculate_polar_balance(
         (sensor_values.north + sensor_values.east) -
         (sensor_values.west + sensor_values.south);
 
-    const float normalized_x =
-        static_cast<float>(x_load) / total_load;
-    const float normalized_y =
-        static_cast<float>(y_load) / total_load;
-    const float normalized_radius =
-        sqrtf(normalized_x * normalized_x + normalized_y * normalized_y);
-    const long radius = static_cast<long>(
-        normalized_radius * balance_max
+    const float radius = sqrtf(
+        static_cast<float>(x_load * x_load) +
+        static_cast<float>(y_load * y_load)
     );
 
     return {
-        radius > balance_max ? balance_max : radius,
-        atan2f(normalized_y, normalized_x)
+        static_cast<long>(radius > balance_max ? balance_max : radius),
+        atan2f(static_cast<float>(y_load), static_cast<float>(x_load))
     };
 }
 

@@ -102,7 +102,7 @@ public:
      * @brief performs a simple tare operation, averaging a few readings
      * @return void
      */
-    void simple_tare(void); 
+    void simple_tare(uint16_t num_samples = 640);
 
     /**
      * @brief checks the current sensor value and updates drift compensation as well as idle status.

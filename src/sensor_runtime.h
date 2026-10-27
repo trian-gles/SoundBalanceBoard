@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include "HX71708.h"
 #include "app_config.h"
+#include "sensor_values.h"
 //all startup-functions for the HX71708 ADCs are in this namespace
 
 namespace SensorRuntime {
@@ -13,7 +14,7 @@ namespace SensorRuntime {
      * @param num_sensors Number of sensors
      * @param warmup_reads Number of readings to perform for warm-up
      */
-void _warm_up_sensors(HX71708 sensors[], uint8_t num_sensors = AppConfig::NUM_SENSORS, uint8_t warmup_reads = 1280);
+void _warm_up_sensors(HX71708 sensors[], uint8_t num_sensors = AppConfig::NUM_SENSORS, uint16_t warmup_reads = 1280);
 
     /**
      * @brief Initializes all sensors
@@ -35,17 +36,28 @@ void tare_all_sensors(
     /**
      * @brief Reads all sensors
      * @param sensors Array of sensor objects
+     * @param num_sensors Number of sensors
      */
-void read_sensors(HX71708 sensors[]);
+void read_sensors(HX71708 sensors[], uint8_t num_sensors = AppConfig::NUM_SENSORS);
 
     /**
-     * @brief Updates the idle states of all sensors based on the presence threshold
-     * @param sensors Array of sensor objects
-     * @param presence_threshold Threshold to determine if there is a load present
+     * @brief Checks whether the complete board is idle based on the total load.
+     * @param sensors Array of sensor objects with current readings
+     * @param presence_threshold Minimum total load in grams considered as presence
+     * @return true if the total load is at or below the threshold
      */
-void update_idle_states(
+    bool is_board_idle(
+        const HX71708 sensors[],
+        long presence_threshold = AppConfig::PRESENCE_THRESHOLD,
+        uint8_t num_sensors = AppConfig::NUM_SENSORS);
+
+    /**
+     * @brief Applies drift compensation to all sensors
+     * @param sensors Array of sensor objects
+     * @param presence_threshold Threshold used by the sensor drift logic
+     */
+void compensate_drift(
     HX71708 sensors[],
     long presence_threshold = AppConfig::PRESENCE_THRESHOLD
 );
-
 }

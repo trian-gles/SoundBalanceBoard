@@ -141,8 +141,7 @@ void HX71708::tare() {
     Serial.println(_offset);
 }
 
-void HX71708::simple_tare() {
-    constexpr int num_samples = 1280; // 640 samples for a simple tare
+void HX71708::simple_tare(const uint16_t num_samples) {
     long sum = 0;
     int valid_samples = 0;
 
@@ -252,8 +251,8 @@ void HX71708::_soft_tare(float weight_factor) {
     long new_sample = sample_sum / sample_count;
 
     // weighted offset
-    float old_factor = 1.0f - weight_factor;
-    long new_offset = (long)((_offset * old_factor) + (new_sample * weight_factor));
+    float factor = 1.0f - weight_factor;
+    long new_offset = (long)((_offset * factor) + (new_sample * weight_factor));
 
 
     _offset = new_offset;
