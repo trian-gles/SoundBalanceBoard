@@ -3,6 +3,9 @@
 #include <HX71708_ADC.h> // Die HX71708 Bibliothek für den 24-Bit A/D-Wandler
 #include "Osc.h"
 #include "Gain.h"
+#include "app_config.h"
+#include "sensor_runtime.h"
+#include "signal_processing.h"
 
 Osc aOsc1; // declare an instance of the oscillator class
 Osc aOsc2; // declare an instance of the oscillator class
@@ -14,21 +17,20 @@ unsigned long pitchDelta = 1000; // time between pitch updates
 // Pin-Definitionen 
 const int SCK_PINS[] = {3, 5, 7, 9};
 const int DOUT_PINS[] = {2, 4, 6, 8};
-const int NUM_SENSORS = 4;
-
-const float SCALE_FACTORS[] = {0.0186, 0.0186, 0.0186, 0.0186};
+//const int NUM_SENSORS = 4;
 
 // Array von Sensor-Objekten
-HX71708_ADC sensors[NUM_SENSORS] = {
-    HX71708_ADC(SCK_PINS[0], DOUT_PINS[0]),
-    HX71708_ADC(SCK_PINS[1], DOUT_PINS[1]),
-    HX71708_ADC(SCK_PINS[2], DOUT_PINS[2]),
-    HX71708_ADC(SCK_PINS[3], DOUT_PINS[3])
+HX71708 sensors[AppConfig::NUM_SENSORS] = {
+    HX71708(SCK_PINS[0], DOUT_PINS[0]),
+    HX71708(SCK_PINS[1], DOUT_PINS[1]),
+    HX71708(SCK_PINS[2], DOUT_PINS[2]),
+    HX71708(SCK_PINS[3], DOUT_PINS[3])
 };
 
-void initializeSensors();
+/*void initializeSensors();
 void calibrateAllSensors();
 void calibrationValues();
+*/
 
 //Pins
 // #define I2S_BCK 12
@@ -53,15 +55,19 @@ void initializeAudioOut()
 void setup() {
     Serial.begin(115200);
     delay(500);
-    Serial.println("Initialisiere HX71708 ADCs...");
+    
+    Serial.println("Initialisiere Audio...");
     initializeAudioOut(); // Initialize audio output
 
-    // Initialisierung aller Sensoren mit Schleife
-    initializeSensors();
-    
-    // Kalibrierung aller Sensoren
-    calibrateAllSensors();
-    
+
+    Serial.println("Initialisiere HX71708 ADCs...");
+    SensorRuntime::initialize_sensors(sensors, AppConfig::NUM_SENSORS);
+    delay(1000); // kurze Stabilisierung vor dem Tare
+    SensorRuntime::warm_up_sensors(sensors, AppConfig::NUM_SENSORS);
+    SensorRuntime::calibrate_all_sensors(
+        sensors
+    );
+    Serial.println("HX71708 ADCs initialisiert.");    
     Serial.println("Initialisierung abgeschlossen.");
 }
 
@@ -70,19 +76,20 @@ int count = 0;
 void loop() {
     count++;
     //play(); // Play square wave (example)
+    
     // Alle Sensoren lesen
-    for (int i = 0; i < NUM_SENSORS; i++) {
-        float value = sensors[i].read_corrected();
-    }
+    SignalProcessing::PolarCoordinates polarCoordinates = SignalProcessing::calculate_polar_balance(sensors, AppConfig::PRESENCE_THRESHOLD, AppConfig::BALANCE_MAX); 
+    Serial.println("Radius: " + String(polarCoordinates.radius) + ", Angle: " + String(polarCoordinates.angle));
 
-        pitchTime += pitchDelta;
-        float phase = TWO_PI * ((float)(count % 20000))/ 10000.0;
-        float pitch = 49 + sin(phase);
-        Serial.println(pitch);
-        aOsc1.setPitch(pitch);
+    pitchTime += pitchDelta;
+    float phase = TWO_PI * ((float)(count % 20000))/ 10000.0;
+    float pitch = 49 + sin(phase);
+    Serial.println(pitch);
+    aOsc1.setPitch(pitch);
 }
 
-void initializeSensors() {
+//old implementation for sensorstart
+/*void initializeSensors() {
     for (int i = 0; i < NUM_SENSORS; i++) {
         Serial.print("Initialisiere Sensor ");
         Serial.println(i + 1);
@@ -102,20 +109,9 @@ void calibrateAllSensors() {
         Serial.print(i + 1);
         Serial.print(" Tare abgeschlossen. Offset: ");
         Serial.println(sensors[i].get_offset());
-        
-        sensors[i].set_scale_factor(SCALE_FACTORS[i]);
         delay(1000);
     }
-}
-
-void calibrationValues() {
-    Serial.println("Kalibrierungswerte:");
-    for (int i = 0; i < NUM_SENSORS; i++) {
-        sensors[i].calibrate(1245);
-        Serial.print(", Skalierungsfaktor = ");
-        Serial.println(sensors[i].get_scale_factor(), 6);
-    }
-}
+}*/
 
 void audioUpdate() {
   int32_t leftVal = outputGain.next(aOsc1.next() + aOsc2.next());

@@ -1,114 +1,108 @@
 #ifndef HX71708_ADC_H
 #define HX71708_ADC_H
 
-#include <Arduino.h> // Für Arduino-Funktionen wie pinMode, digitalWrite, digitalRead, delayMicroseconds, millis, Serial
-
+#include <Arduino.h> 
+#include "app_config.h"
 /**
- * @brief Eine Klasse zur Steuerung und zum Auslesen des HX71708 24-Bit A/D-Wandlers.
- *
- * Der HX71708 ist ein hochpräziser 24-Bit A/D-Wandler, der speziell für
- * elektronische Waagen entwickelt wurde [1]. Er zeichnet sich durch hohe
- * Integration, schnelle Reaktionszeiten und starke Anti-Interferenz-Fähigkeit aus [1].
- * Der Chip benötigt lediglich 2 I/O-Pins eines Mikrocontrollers zur Steuerung,
- * einschließlich der Abschaltsteuerung (Power-Down-Control) [1].
+ * @brief A class to control and read the HX71708 24-bit A/D converter.
  */
-class HX71708_ADC {
+class HX71708 {
 private:
-    /**
-     * @brief Eine private Hilfsfunktion für kurze Verzögerungen, die _nop_() ersetzt.
-     *        Entspricht etwa einer Verzögerung von 1 Mikrosekunde.
-     *        Dies ist notwendig, um die Timing-Anforderungen des HX71708 Datenblatts
-     */
+    bool _timeout_active;
+    bool _last_read_timed_out;
+    
+    // Drift-compensation-state
+    unsigned long _last_activity_time;
+    unsigned long _last_update_time;
+    unsigned long _last_tare_time;
+    bool _idle;
+
     void _custom_nop_delay(void) {
         ((void)0);
     }
+    
+    // Drift-compensation-constants (should be synchronized with app_config)
+    /*static constexpr unsigned long DRIFT_IDLE_TIME_MS = 30000;      // 30s
+    static constexpr float DRIFT_WEIGHT_FACTOR = 0.2f;               // 20%
+    static constexpr unsigned long DRIFT_COOLDOWN_MS = 5000;         // 5s
+    static constexpr unsigned long DRIFT_UPDATE_INTERVAL_MS = 1000;  // 1s*/
 
 public:
-    int _pdSckPin; // Pin für PD_SCK (Power Down Control und Serieller Takt) [2, 3]
-    int _doutPin;  // Pin für DOUT (Serielle Datenausgabe) [2, 3]
+    int _pdSckPin; //clock-pin
+    int _doutPin;  // data-pin
     long _offset;
-    float _scale_factor; // Skalierungsfaktor für die Kalibrierung des Sensors
     /**
-     * @brief Konstruktor für die HX71708_ADC-Klasse.
-     * @param pdSckPin Der GPIO-Pin, der mit dem PD_SCK-Pin des HX71708 verbunden ist.
-     *                 PD_SCK ist ein digitaler Eingang für die Abschaltsteuerung
-     *                 (High-Level ist aktiv) und den seriellen Takteingang [3, 5].
-     * @param doutPin Der GPIO-Pin, der mit dem DOUT-Pin des HX71708 verbunden ist.
-     *                DOUT ist ein digitaler Ausgang für die serielle Datenausgabe [3, 5].
+     * @brief HX71708_ADC constructor
+     * @param pdSckPin clock-pin connected to PD_SCK of HX71708
+     * @param doutPin data-pin connected to DOUT of HX71708
+     *                
      */
-    HX71708_ADC(int pdSckPin, int doutPin);
-
+    HX71708(int pdSckPin, int doutPin);
     /**
-     * @brief Initialisiert den HX71708 ADC nach dem Einschalten.
-     *        Konfiguriert die GPIO-Pins und setzt den ADC in einen bekannten Zustand.
-     *        Diese Methode sollte einmalig für jede Instanz beim Start des Systems aufgerufen werden.
-     *
-     *        Laut den Hinweisen zur Nutzung soll der Mikrocontroller den PD_SCK-Pin
-     *        beim Einschalten des ADC-Chips für mehr als 100 Mikrosekunden auf HIGH ziehen
-     *        und dann wieder auf LOW setzen, um den ADC-Chip zurückzusetzen [6].
+     * @brief initializes the HX71708 ADC after power-up
      */
     void begin(void);
-
-
     /**
-     * @brief Gibt den Offset des Sensors zurück. 
+     * @brief returns offset of the sensor
      */
     long get_offset(void);
-
     /**
-     * @brief Setzt den Offset des Sensors.
-     * @param offset Der neue Offset-Wert, der gesetzt werden soll.
+     * @brief sets the offset of the sensor
+     * @param offset the new offset value to set
      */
     void set_offset(long offset);
-    /**
-     * @brief Setzt den Skalierungsfaktor des Sensors.
-     * @param scale_factor Der neue Faktor, der gesetzt werden soll.
-     */
-    void set_scale_factor(float scale_factor);
 
     /**
-     * @brief Gibt den Skalierungsfaktor des Sensors zurück.
-     * @return Der aktuelle Skalierungsfaktor.
+     * @brief checks if the sensor is currently in an idle state (no load, extended period)
+     * @return true if idle, false otherwise
      */
-    float get_scale_factor(void);
+    bool is_idle() const;
+    
 
     /**
-     * @brief Wandelt den Rohwert des Sensors in Gramm um.
-     * @param raw Der Rohwert des Sensors.
-     * @return Der um den Offset korrigierte Wert in Gramm.
+     * @brief returns the raw, offset-corrected sensor value and scales by the scale factor
+     * @return Offset-corrected raw value as `long`.
      */
-    float toGrams(long raw);
+    long read_corrected(void);
+    
     /**
-     * @brief Liest einen 24-Bit Sensorwert vom HX71708 ADC und setzt die nächste Datenrate auf 320Hz.
-     *        Die serielle Kommunikation erfolgt über die Pins PD_SCK und DOUT [3].
-     *        Die 24-Bit-Ausgangsdaten sind im binären Zweierkomplement-Code formatiert,
-     *        wobei das MSB das Vorzeichenbit ist [7].
-     *        Die Umwandlung in einen vorzeichenlosen Wert erfolgt durch XOR mit 0x800000 [4].
-     * @return Der umgewandelte 24-Bit Wert. Gibt 0 zurück, falls ein Timeout auftritt
-     *         und der ADC zurückgesetzt werden muss.
-     *         Nach einem Reset oder einer Änderung der Datenrate benötigt der ADC
-     *         vier Datenzyklen, um stabile Ausgangsdaten zu liefern [8, 9].
+     * @brief reads a 24-bit sensor value from the HX71708 ADC and sets the next data rate to 320Hz.
+     *        The 24-bit output data is formatted in binary two's complement code,
+     *        where the MSB is the sign bit.
+     *        The conversion to an unsigned value is done by XOR with 0x800000.
+    * @return The converted 24-bit value. In case of timeout, a safe fallback
+    *         is returned and the ADC is reset briefly.
      */
-    long read320Hz(void);
+    long read(void);
 
     /**
-     * @brief ermittelt den Nullpunkt des Sensors.
+     * @brief determines the zero point of the sensor with multiple blocks of readings which are averaged 
+     * and the median of the block means is used as the offset
      * @return void
      */
     void tare(void);
 
     /**
-     * @brief Gibt Sensor Werte zurück, die um den Nullpunkt korrigiert sind.
-     * @return Der um den Nullpunkt korrigierte 24-Bit Wert.
-     */
-    float read_corrected(void);
-
-    /**
-     * @brief berechnet den Skalierungsfaktor des Sensors und setzt diesen als Parameter
-     * @param known_weight Ein bekanntes Gewicht, zur ermittelung des Skalierungsfaktors
+     * @brief performs a simple tare operation, averaging a few readings
      * @return void
      */
-    void calibrate(int known_weight);
+    void simple_tare(void); 
+
+    /**
+     * @brief performs a soft tare update to adjust the offset, when no load is present
+     * @param weight_factor weighting factor for the new measurement (0.0-1.0). E.g. 0.2 = 20% new, 80% old.
+     * @return void
+     */
+    void soft_tare(float weight_factor = AppConfig::DRIFT_WEIGHT_FACTOR);
+    
+    /**
+     * @brief checks the current sensor value and updates drift compensation as well as idle status.
+     *        Should be called regularly (e.g., once per second)
+     * @param sensor_value Offset-corrected sensor value in Counts.
+     * @param presence_threshold Threshold above which the sensor is considered loaded.
+     * @return void
+     */
+    void check_idle_and_soft_tare(long sensor_value, long presence_threshold);
 };
 
 #endif // HX71708_ADC_H

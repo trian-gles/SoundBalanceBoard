@@ -1,12 +1,11 @@
 {
 	"folders": [
 		{
-			"name": "WebServer",
-			"path": "../WebServer"
+			"name": "QuirinPlatten",
+			"path": "."
 		},
 		{
-			"name": "SensorDataSending",
-			"path": "."
+			"path": "../SensorDataSending"
 		}
 	],
 	"settings": {
@@ -35,6 +34,14 @@
 			"numeric": "cpp",
 			"ostream": "cpp",
 			"utility": "cpp"
-		}
+		},
+		"python-envs.pythonProjects": [
+			{
+				"path": "scripts/polar_serial_plot.py",
+				"envManager": "ms-python.python:venv",
+				"packageManager": "ms-python.python:pip",
+				"workspace": "QuirinPlatten"
+			}
+		]
 	}
 }
