@@ -72,14 +72,58 @@ namespace SensorRuntime {
 
     void compensate_drift(
         HX71708 sensors[],
-        long presence_threshold
+        long presence_threshold,
+        uint8_t num_sensors
     ) {
         if (sensors == nullptr) {
             return;
         }
 
-        for (uint8_t i = 0; i < AppConfig::NUM_SENSORS; ++i) {
+        for (uint8_t i = 0; i < num_sensors; ++i) {
             sensors[i].drift_correction(presence_threshold);
         }
+    }
+
+    bool detect_stuck_board(
+        HX71708 sensors[],
+        long radius,
+        uint8_t num_sensors
+    ) {
+        if (sensors == nullptr) {
+            return false;
+        }
+
+        static long previous_radius = 0;
+        static unsigned long candidate_since = 0;
+        static bool initialized = false;
+        const unsigned long now = millis();
+
+        if (!initialized) {
+            previous_radius = radius;
+            initialized = true;
+            return false;
+        }
+
+        const long radius_change = labs(radius - previous_radius);
+        const bool is_candidate =
+            radius > 0 &&
+            radius_change <= AppConfig::STUCK_BOARD_RADIUS_TOLERANCE;
+
+        if (!is_candidate) {
+            candidate_since = 0;
+        } else if (candidate_since == 0) {
+            candidate_since = now;
+        } else if (now - candidate_since >= AppConfig::STUCK_BOARD_TIME_MS) {
+            Serial.println("WARN: Statischer Balance-Radius erkannt, fuehre schnellen Tare aus.");
+            for (uint8_t i = 0; i < num_sensors; ++i) {
+                sensors[i].simple_tare(AppConfig::QUICK_TARE_SAMPLES);
+            }
+            candidate_since = 0;
+            previous_radius = 0;
+            return true;
+        }
+
+        previous_radius = radius;
+        return false;
     }
 }

@@ -151,18 +151,12 @@ void HX71708::simple_tare(const uint16_t num_samples) {
             sum += sample;
             valid_samples++;
         }
-        delay(10);
     }
 
     if (valid_samples > 0) {
         _offset = sum / valid_samples;
-        Serial.print("INFO: Tare finished at DOUT ");
-        Serial.print(_doutPin);
-        Serial.print(", Offset: ");
-        Serial.println(_offset);
     } else {
-        Serial.print("WARN: Tare aborted, no valid samples at DOUT ");
-        Serial.println(_doutPin);
+        return; // No valid samples, do not change the offset
     }
 }
 

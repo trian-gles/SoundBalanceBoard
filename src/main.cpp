@@ -55,22 +55,31 @@ SignalProcessing::PolarCoordinates sensor_processings(
         sensors[3].get_last_gram_value(),
         sensors[2].get_last_gram_value()
     };
-    const SensorValues normalized_sensor_values =
-        gram_sensor_values.normalize(AppConfig::BALANCE_MAX);
+
     if (SensorRuntime::is_board_idle(sensors)) {
         SensorRuntime::compensate_drift(sensors);
         return {0, 0.0f};
     }
 
-    SensorRuntime::detect_stuck_sensor(
-        sensors,
-        normalized_sensor_values
-    );
+    const SensorValues normalized_sensor_values =
+        gram_sensor_values.normalize(AppConfig::BALANCE_MAX);
+        
+    const SignalProcessing::PolarCoordinates polar_coordinates =
+        SignalProcessing::calculate_polar_balance(
+            normalized_sensor_values,
+            AppConfig::BALANCE_MAX
+        );
 
-    return SignalProcessing::calculate_polar_balance(
-        normalized_sensor_values,
-        AppConfig::BALANCE_MAX
-    );
+    /*if (SensorRuntime::detect_stuck_board(
+            sensors,
+            polar_coordinates.radius
+        )) {
+        return {0, 0.0f};
+    }*/
+
+    
+
+    return polar_coordinates;
 }
 
 void setup() {

@@ -5,6 +5,7 @@
 
 /**
  * simples struct to hold the values of all four sensors in grams
+ * with the ability to normalize the values to a maximum value, while keeping the ratio between the sensors
  * 
  */
 

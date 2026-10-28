@@ -58,6 +58,20 @@ void read_sensors(HX71708 sensors[], uint8_t num_sensors = AppConfig::NUM_SENSOR
      */
 void compensate_drift(
     HX71708 sensors[],
-    long presence_threshold = AppConfig::PRESENCE_THRESHOLD
+    long presence_threshold = AppConfig::PRESENCE_THRESHOLD,
+    uint8_t num_sensors = AppConfig::NUM_SENSORS
+);
+
+    /**
+     * @brief Detects a radius that remains nearly unchanged and quickly
+     *        tares all sensors after the confirmation period.
+     * @param sensors Array of sensor objects
+     * @param radius Current normalized polar radius
+     * @return true if a quick tare was performed
+     */
+bool detect_stuck_board(
+    HX71708 sensors[],
+    long radius,
+    uint8_t num_sensors = AppConfig::NUM_SENSORS
 );
 }
