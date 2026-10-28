@@ -3,7 +3,10 @@
 #include <HX71708_ADC.h> // Die HX71708 Bibliothek für den 24-Bit A/D-Wandler
 #include "Osc.h"
 #include "Gain.h"
+#include "SVF.h"
 
+SVF lowCut1;
+SVF lowCut2;
 Osc aOsc1; // declare an instance of the oscillator class
 Osc aOsc2; // declare an instance of the oscillator class
 Gain outputGain(1000); // 0 = silent, 1024 = full level
@@ -42,11 +45,16 @@ void calibrationValues();
 void initializeAudioOut()
 {
     seti2sPins(I2S_BCK, I2S_LRCK, I2S_DATA, -1);
+
     delay(200); // let the Serial port get established
     aOsc1.sinGen(); // initialise the osc's built-in wavetable with a sine waveform
     aOsc2.sinGen();
-    aOsc1.setPitch(48); // MIDI pitch
-    aOsc2.setPitch(48); // MIDI pitch
+    aOsc1.setPitch(31); // MIDI pitch
+    aOsc2.setPitch(31); // MIDI pitch
+    lowCut1.setFreq(90);
+    lowCut1.setRes(0.1);
+    lowCut2.setFreq(90);
+    lowCut2.setRes(0.1);
     audioStart();
 }
 
@@ -77,7 +85,7 @@ void loop() {
 
         pitchTime += pitchDelta;
         float phase = TWO_PI * ((float)(count % 20000))/ 10000.0;
-        float pitch = 49 + sin(phase);
+        float pitch = 32 + sin(phase);
         Serial.println(pitch);
         aOsc1.setPitch(pitch);
 }
@@ -118,8 +126,10 @@ void calibrationValues() {
 }
 
 void audioUpdate() {
-  int32_t leftVal = outputGain.next(aOsc1.next() + aOsc2.next());
-  int32_t rightVal = leftVal;
+    int32_t vOsc1 = aOsc1.next();
+    int32_t vOsc2 = aOsc2.next();
+    int32_t leftVal = lowCut1.nextHPF(outputGain.next(vOsc1 * 1.8 + vOsc2 * 0.6));
+    int32_t rightVal = lowCut2.nextHPF(outputGain.next(vOsc2 * 1.8 + vOsc1 * 0.6));
   audioBlockWrite(leftVal, rightVal);
 }
 
