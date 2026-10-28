@@ -38,9 +38,10 @@ void calibrationValues();
 // #define I2S_DATA 11
 // #define I2S_LRCK 10
 
+// I2S Pins for ESP32, unfortunately not soldered as wanted, so I had to swap Pin 11 and 10 here
 #define I2S_BCK   47  // physical pin D12
-#define I2S_DATA  38  // physical pin D11
-#define I2S_LRCK  21  // physical pin D10
+#define I2S_DATA  21  // physical pin D11
+#define I2S_LRCK  38  // physical pin D10
 
 void initializeAudioOut()
 {
